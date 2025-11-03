@@ -1,4 +1,12 @@
 # Add Initialization steps (TBD)
+Install requirements using conda:
+```bash
+conda create --name PROJ3106 -c conda-forge --file requirements.txt
+```
+Or install dependencies  using pip:
+```bash
+pip install -r requirements.txt
+```
 ---
 # Hybrid Monocular Distance Estimation using CNN + Pinhole Residual
 
