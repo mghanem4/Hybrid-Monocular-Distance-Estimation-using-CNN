@@ -1,3 +1,5 @@
+# Add Initialization steps (TBD)
+---
 # Hybrid Monocular Distance Estimation using CNN + Pinhole Residual
 
 **Course:** COMP 3106 – Introduction to Artificial Intelligence  

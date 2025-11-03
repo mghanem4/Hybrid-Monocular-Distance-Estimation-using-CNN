@@ -43,16 +43,24 @@ def crop_from_kitti(img_path, label_line:list, out_size=(128, 128)):
 def read_files(directory_path):
     """Reads and prints the content of all .txt files in a given directory using os module."""
     objects=[]
+    total_obj=0
     for filename in os.listdir(directory_path):
         if str(filename).endswith(".txt"):
             filepath = os.path.join(directory_path, filename)
             try:
                 with open(filepath, 'r', encoding='utf-8') as file:
+                    print(filename)
                     label = file.read()
                     label= label.strip().split('\n')
-                    for obj in label:
+                    for i, obj in enumerate(label):
+                        obj= obj.split(' ')
+                        print(obj[0])
+                        if(obj[0]=='DontCare'):
+                            # skip unwanted objects
+                            continue
+                        total_obj+=1
                         objects.append(obj)
-                        print(obj)
+                        print(f'{total_obj}. {obj}')
             except IOError as e:
                 print(f"Error reading file {filename}: {e}")
 
@@ -60,6 +68,8 @@ def read_files(directory_path):
 # Replace 'your_directory_path' with the actual path to your directory
 # read_all_txt_files_os('your_directory_path')
 if __name__ == '__main__':
+    read_files('training/label_2/')
+    exit()
     img_index='000003'
     image_path=f'data_object_image_2/training/image_2/{img_index}.png'
     label_line_path=f'training/label_2/{img_index}.txt'
