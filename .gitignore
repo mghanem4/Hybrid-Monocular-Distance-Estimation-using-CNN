@@ -2,3 +2,7 @@ training/
 data_object_image_2/
 .vscode
 corpus.pkl
+data_object_calib/
+config/calib_data.pkl
+config/label_data.pkl
+github_push.txt

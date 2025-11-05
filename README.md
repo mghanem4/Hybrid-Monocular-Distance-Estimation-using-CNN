@@ -7,6 +7,20 @@ Or install dependencies  using pip:
 ```bash
 pip install -r requirements.txt
 ```
+>[!important] Large files are excluded from this repo for portability. Including a 12GB dataset won't do anyone any good and will just slow down the process. To download the dataset separately, please visit the dataset website (included in references) **KITTI Vision Benchmark Suite.** [Website](http://www.cvlibs.net/datasets/kitti/)
+
+# Downloading Dataset
+Due to the large content of this dataset, please follow the instructions below to download the dataset and you use the model.
+
+1. Go to **KITTI Vision Benchmark Suite.** [Website](http://www.cvlibs.net/datasets/kitti/)
+2. Hover over 'Object' in the menu, and select 3D Object, or easily follow through this [link](https://www.cvlibs.net/datasets/kitti/eval_object.php?obj_benchmark=3d)
+3. You will need the following (Tentative):
+    - Download left color images of object data set (12 GB)
+    - Download camera calibration matrices of object data set (16 MB)
+    - Download training labels of object data set (5 MB)
+    - [Optional] Download object development kit (1 MB) (including 3D object detection and bird's eye view evaluation code)
+
+
 ---
 # Hybrid Monocular Distance Estimation using CNN + Pinhole Residual
 
