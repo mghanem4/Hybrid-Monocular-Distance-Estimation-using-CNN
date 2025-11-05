@@ -5,6 +5,9 @@ from typing import Dict, List, Tuple
 import numpy as np
 from typing import Callable
 
+
+
+
 def save_pickle(data, path: str) -> None:
     '''
     Generic Save pickle function
@@ -90,12 +93,13 @@ def read_calib_files(directory_path: str, verbose: bool = False) -> Tuple[int, D
     return total_calib, calib_p2
 
 
-def load_or_build(labels_dir: str,read_function:Callable[[str, bool], Tuple[int,dict]],cache_path: str = "data.pkl", verbose: bool = False):
+def load_or_build(labels_dir: str,read_function:Callable[[str, bool], Tuple[int,dict]],cache_path: str = "data.pkl", verbose: bool = False, rebuild=False):
     """
     If cache_path exists, load and return it.
     Otherwise build from labels_dir, save, and return.
     """
-    if os.path.exists(cache_path):
+
+    if (not rebuild) and os.path.exists(cache_path):
         if verbose:
             print(f"Loading cached data from {cache_path}")
         return load_pickle(cache_path)
@@ -110,6 +114,17 @@ def load_or_build(labels_dir: str,read_function:Callable[[str, bool], Tuple[int,
         print(f"Saved cache to {cache_path}")
     return payload
 
+def fetchCalibrationData(datapath, pkl_path) -> dict:
+    calib_data = load_or_build(datapath,read_calib_files, cache_path=pkl_path, verbose=False)
+    return calib_data['items']
+
+def fetchLabelData(datapath,pkl_path) -> dict :
+    label_data = load_or_build(datapath,read_label_files, cache_path=pkl_path, verbose=False)
+    return label_data['items']
+
+# me testing
 if __name__ == "__main__":
-    calib_data = load_or_build('../data_object_calib/training/calib/',read_calib_files, cache_path="calib_data.pkl", verbose=False)
-    label_data = load_or_build("../training/label_2/",read_label_files, cache_path="label_data.pkl", verbose=False)
+    # calib_data = load_or_build('../data_object_calib/training/calib/',read_calib_files, cache_path="calib_data.pkl", verbose=False)
+    # label_data = load_or_build("../training/label_2/",read_label_files, cache_path="label_data.pkl", verbose=False)
+    fetchLabelData()
+    fetchCalibrationData()
