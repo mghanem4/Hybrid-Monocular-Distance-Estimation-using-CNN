@@ -1,9 +1,14 @@
 # Add Initialization steps (TBD)
 Install requirements using conda:
 ```bash
-conda create --name PROJ3106 -c conda-forge --file requirements.txt
+conda create --name PROJ3106 python=3.10 -c conda-forge
 ```
-Or install dependencies  using pip:
+Activate Conda environment:
+```bash
+conda activate PROJ3106
+```
+
+Install dependencies  using pip:
 ```bash
 pip install -r requirements.txt
 ```

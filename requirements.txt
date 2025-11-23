@@ -1,2 +1,4 @@
-opencv
+opencv-python
 numpy
+tensorflow
+matplotlib
