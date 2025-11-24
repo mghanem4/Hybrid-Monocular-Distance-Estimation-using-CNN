@@ -11,7 +11,6 @@ class HybridDistanceNet(nn.Module):
 # instead of initializing the ResNet18 model with random, garbage numbers, you are downloading and loading a set of weights (parameters) that have already been optimized on a massive dataset.
         resnet = models.resnet18(pretrained=pretrained)
         self.features = nn.Sequential(*list(resnet.children())[:-1])
-
         # Head 1: Classification (Car, Ped, Cyc)
         self.classifier = nn.Sequential(
             nn.Linear(512, 128),
