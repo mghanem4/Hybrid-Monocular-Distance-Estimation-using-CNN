@@ -6,3 +6,6 @@ data_object_calib/
 config/calib_data.pkl
 config/label_data.pkl
 github_push.txt
+training.zip
+data_object_calib.zip
+data_object_image_2.zip
