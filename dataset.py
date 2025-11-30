@@ -7,6 +7,8 @@ import torch
 from pathlib import Path
 from torch.utils.data import Dataset
 from typing import Dict, List, Tuple, Optional, Callable
+from PIL import Image
+from torchvision import transforms
 
 # --------------------------------------------------------------------------
 # DATA MODULES
@@ -154,6 +156,7 @@ class KittiObjectDataset(Dataset):
     def __getitem__(self, idx):
         obj = self.objects[idx]
         img_path = obj['img_path']
+        img_id = obj['img_id']
         img = cv2.imread(obj['img_path'])
         # 1. Load Image
         if img is None or img.size == 0:
@@ -194,8 +197,8 @@ class KittiObjectDataset(Dataset):
         # 3. Resize
         crop = cv2.resize(crop, (128, 128))
 
-        # Change from (128, 128, 3) -> (3, 128, 128)
-        crop = np.transpose(crop, (2, 0, 1))
+        # Convert to PIL Image for torchvision transforms
+        crop = Image.fromarray(crop)
 
         # 4. Get the Average Height for this specific class 
         cls_name = obj['class_name']
@@ -206,9 +209,14 @@ class KittiObjectDataset(Dataset):
 
         if self.transform:
             crop = self.transform(crop)
+        else:
+            # Default to ToTensor if no transform provided (converts to [0,1], CHW)
+            crop = transforms.ToTensor()(crop)
+            
         # Look up the integer index using the dictionary built in get_class_stats
         cls_idx = self.class_to_idx[cls_name]
         return {
+            'img_id': img_id,
             'image': crop,
             'bbox_height': np.float32(h_pixel),
             'class_idx': np.int64(cls_idx),

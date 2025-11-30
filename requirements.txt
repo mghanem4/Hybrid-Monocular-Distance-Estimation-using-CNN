@@ -1,5 +1,5 @@
 opencv-python
 numpy
-tensorflow
 matplotlib
 pytorch
+loguru

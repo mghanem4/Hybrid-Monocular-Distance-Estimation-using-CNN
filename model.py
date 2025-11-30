@@ -1,48 +1,56 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision import models
 
 class HybridDistanceModel(nn.Module):
-    def __init__(self, num_classes: int = 3):
+    def __init__(self, num_classes: int = 3, backbone: str = 'custom'):
         super(HybridDistanceModel, self).__init__()
         
-        # ---------------------------------------------------------
-        # CNN Backbone (Lightweight Feature Extractor)
-        # Input: (Batch, 3, 128, 128)
-        # ---------------------------------------------------------
-        self.features = nn.Sequential(
-            # Block 1: 128x128 -> 64x64 - Raw pixels (edges, lines)
-            # 3 in channels, 32 out channel, filter by 3x3, padding of 1
-            # scan image, look for lines, curves, circles etc.
-            nn.Conv2d(3, 32, kernel_size=3, padding=1),
-            # adjusts the math so the numbers don't get too big or too small. This makes training much faster and more stable.
-            nn.BatchNorm2d(32),
-            # Activation function: Rectified linear unit
-            nn.ReLU(),
-            # It shrinks the image size to keep only the most important features and throws away the noise.
-            nn.MaxPool2d(2),
+        self.backbone_type = backbone
+
+        if backbone == 'resnet18':
+            # Load pretrained ResNet18
+            resnet = models.resnet18(pretrained=True)
+            # Remove the final FC layer (fc) and keep everything else
+            # ResNet18 structure: conv1 -> bn1 -> relu -> maxpool -> layer1 -> layer2 -> layer3 -> layer4 -> avgpool -> fc
+            # usage of children()[:-1] grabs everything up to avgpool
+            self.features = nn.Sequential(*list(resnet.children())[:-1])
+            # ResNet18 output after avgpool is 512 channels
+            self.flatten_dim = 512
             
-            # Block 2: 64x64 -> 32x32 - Corners, curves, circles, grids.
-            nn.Conv2d(32, 64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            
-            # Block 3: 32x32 -> 16x16
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            
-            # Block 4: 16x16 -> 8x8
-            nn.Conv2d(128, 256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-        )
-        
-        # Flattened dimension: 256 channels * 8 * 8 spatial
-        self.flatten_dim = 256 * 8 * 8
+        else: # 'custom'
+            # ---------------------------------------------------------
+            # CNN Backbone (Lightweight Feature Extractor)
+            # Input: (Batch, 3, 128, 128)
+            # ---------------------------------------------------------
+            self.features = nn.Sequential(
+                # Block 1: 128x128 -> 64x64 - Raw pixels (edges, lines)
+                nn.Conv2d(3, 32, kernel_size=3, padding=1),
+                nn.BatchNorm2d(32),
+                nn.ReLU(),
+                nn.MaxPool2d(2),
+                
+                # Block 2: 64x64 -> 32x32
+                nn.Conv2d(32, 64, kernel_size=3, padding=1),
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+                nn.MaxPool2d(2),
+                
+                # Block 3: 32x32 -> 16x16
+                nn.Conv2d(64, 128, kernel_size=3, padding=1),
+                nn.BatchNorm2d(128),
+                nn.ReLU(),
+                nn.MaxPool2d(2),
+                
+                # Block 4: 16x16 -> 8x8
+                nn.Conv2d(128, 256, kernel_size=3, padding=1),
+                nn.BatchNorm2d(256),
+                nn.ReLU(),
+                nn.MaxPool2d(2),
+            )
+            # Flattened dimension: 256 channels * 8 * 8 spatial
+            self.flatten_dim = 256 * 8 * 8
 
         # ---------------------------------------------------------
         # Classification Head 
