@@ -4,7 +4,7 @@ import pickle
 from typing import Dict, List, Tuple, Optional, Callable
 from pathlib import Path
 import random
-
+from loguru import logger
 
 # --------------------------------------------------------------------------
 # HELPER FUNCTIONS (Moved from config/read_info.py & data_prep.py)
@@ -38,7 +38,7 @@ def read_label_files(directory_path: str, verbose: bool = False) -> Tuple[int, D
         try:
             lines = p.read_text(encoding="utf-8", errors="ignore").strip().splitlines()
         except OSError as e:
-            print(f"Error reading file {p.name}: {e}")
+            logger.error(f"Error reading file {p.name}: {e}")
             continue
 
         file_objs = []
@@ -96,10 +96,10 @@ def read_calib_files(directory_path: str, verbose: bool = False) -> Tuple[int, D
 
 def load_or_build(labels_dir: str, read_function: Callable, cache_path: str, verbose: bool = False, rebuild=False):
     if (not rebuild) and os.path.exists(cache_path):
-        if verbose: print(f"Loading cached data from {cache_path}")
+        if verbose: logger.info(f"Loading cached data from {cache_path}")
         return load_pickle(cache_path)['items']
 
-    if verbose: print(f"Building data from {labels_dir}...")
+    if verbose: logger.info(f"Building data from {labels_dir}...")
     total_objects, objects = read_function(labels_dir, verbose=verbose)
     payload = {"total_items": total_objects, "items": objects}
     save_pickle(payload, cache_path)
@@ -114,7 +114,7 @@ def get_valid_image_ids(label_data: Dict, calib_data: Dict, image_dir: str) -> L
         # Fallback for dry-run/dummy env if no intersection
         # (Assuming the user might have some partial data)
         if len(label_ids) > 0:
-            print(f"Warning: No full intersection. Found {len(label_ids)} labels, {len(calib_ids)} calibs, {len(image_ids)} images.")
+            logger.error(f"Warning: No full intersection. Found {len(label_ids)} labels, {len(calib_ids)} calibs, {len(image_ids)} images.")
         else:
             raise RuntimeError("No valid image IDs found (intersection of labels, calib, images is empty).")
     return valid_ids

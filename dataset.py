@@ -22,6 +22,8 @@ from data_modules import (
     read_label_files
 )
 
+from loguru import logger
+
 
 # --------------------------------------------------------------------------
 # CONSTANTS & PATHS
@@ -71,8 +73,8 @@ class KittiObjectDataset(Dataset):
         # This function now does two jobs: calculates height stats and discovers classes
         self.avg_heights, self.class_to_idx = self.get_class_stats()
         
-        print(f"[{mode}] Classes Found: {self.class_to_idx}")
-        print(f"[{mode}] Average Heights: {self.avg_heights}")
+        logger.info(f"[{mode}] Classes Found: {self.class_to_idx}")
+        logger.info(f"[{mode}] Average Heights: {self.avg_heights}")
 
     def _flatten_objects(self):
         """
@@ -96,7 +98,7 @@ class KittiObjectDataset(Dataset):
 
             for obj in image_objects:
                 class_name = obj['class_name']
-                if class_name in "DontCare":
+                if class_name == "DontCare":
                     continue
 
                 # Construct the final training object
@@ -114,7 +116,7 @@ class KittiObjectDataset(Dataset):
                     'focal_length': focal_length
                 })
 
-        print(f"Dataset Split Loaded: {len(flat_objects)} objects from {len(self.split_ids)} images.")
+        logger.info(f"Dataset Split Loaded: {len(flat_objects)} objects from {len(self.split_ids)} images.")
         return flat_objects
 
     def get_class_stats(self):
@@ -160,8 +162,8 @@ class KittiObjectDataset(Dataset):
         img = cv2.imread(obj['img_path'])
         # 1. Load Image
         if img is None or img.size == 0:
-            print(f"\n[WARNING] Corrupted/Missing image at: {img_path}")
-            print(f"          Returning dummy black image to prevent crash.")
+            logger.error(f"\n[WARNING] Corrupted/Missing image at: {img_path}")
+            logger.error(f"          Returning dummy black image to prevent crash.")
             
             # Create a black dummy image of standard KITTI size (Height, Width, Channels)
             img = np.zeros((375, 1242, 3), dtype=np.uint8)
@@ -171,7 +173,7 @@ class KittiObjectDataset(Dataset):
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             except cv2.error:
                 # Double safety net
-                print(f"\n[ERROR] cv2.cvtColor failed on: {img_path}")
+                logger.error(f"\n[ERROR] cv2.cvtColor failed on: {img_path}")
                 img = np.zeros((375, 1242, 3), dtype=np.uint8)
 
 

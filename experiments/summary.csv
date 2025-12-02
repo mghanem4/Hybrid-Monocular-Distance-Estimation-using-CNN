@@ -1,0 +1,5 @@
+exp_id,lr,backbone,batch_size,best_val_mae
+exp_01,0.001,custom,32,2.1460154
+exp_02,0.001,resnet18,32,1.6159676
+exp_03,0.0005,custom,32,2.0362523
+exp_04,0.0005,resnet18,32,1.3523417
