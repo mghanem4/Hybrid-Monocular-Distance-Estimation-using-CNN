@@ -1,0 +1,1 @@
+exp_id,varied_param,varied_value,lr,batch_size,weight_decay,step_size,lambda_reg,hidden_dim,dropout,backbone,epochs,best_val_mae

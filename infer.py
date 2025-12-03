@@ -1,4 +1,5 @@
 import torch
+import os
 import cv2
 import numpy as np
 import argparse
@@ -44,12 +45,16 @@ AVG_HEIGHTS = {
     'Misc': 1.92, 
     'Tram': 3.53
 }
+'''
+I will be using the COCO pre trained RCNN model to detect objcets to avoid make the process faster, and to be accurate. I will map the COCO classes to my KITTI classes 
+My classes:
 
+'''
 # Update COCO Map to point to these keys
 COCO_TO_KITTI = {
     1: 'Pedestrian',
     2: 'Cyclist',
-    3: 'Car',      # Now maps to 'Car' correctly
+    3: 'Car',      # maps to 'Car' 
     4: 'Cyclist',
     6: 'Truck',    # Bus -> Truck
     8: 'Truck'     # Truck -> Truck
@@ -59,7 +64,8 @@ def get_object_detector(device):
     Loads a pre-trained Faster R-CNN to find objects in the image.
     """
     print("Loading Object Detector (Faster R-CNN)...")
-    model = fasterrcnn_resnet50_fpn(pretrained=True)
+    weights = models.detection.FasterRCNN_ResNet50_FPN_Weights.DEFAULT
+    model = fasterrcnn_resnet50_fpn(weights=weights)
     model.to(device)
     model.eval()
     return model
@@ -93,7 +99,7 @@ def preprocess_crop(crop_img):
 
 # Define distinct colors for classes (BGR format for OpenCV)
 CLASS_COLORS = {
-    'Car': (0, 255, 0),        # Green
+    'Car': (1, 50, 32),        # Green
     'Van': (0, 200, 200),      # Yellowish-Green
     'Truck': (0, 165, 255),    # Orange
     'Pedestrian': (0, 0, 255), # Red
@@ -119,7 +125,7 @@ def run_inference(image_path, detector, dist_model, device, focal_length):
 
     # 3. Process each detection
     results_img = original_img_cv2.copy()
-    h_img, w_img, _ = original_img_cv2.shape
+    h_img, w_img, _ = original_img_cv2.shape # Get dimensions for normalization
     
     # Filter by confidence
     threshold = 0.5
@@ -135,13 +141,14 @@ def run_inference(image_path, detector, dist_model, device, focal_length):
         if label_idx not in COCO_TO_KITTI:
             continue 
             
-        kitti_class = COCO_TO_KITTI[label_idx]
+        # Use safe casting to int
+        kitti_class = COCO_TO_KITTI[int(label_idx)]
         avg_h = AVG_HEIGHTS[kitti_class]
 
         # Extract Box Coordinates
         x1, y1, x2, y2 = map(int, box)
         
-        # --- PREPROCESSING ---
+        # --- PREPROCESSING (CROP) ---
         pad_w = int((x2 - x1) * 0.1)
         pad_h = int((y2 - y1) * 0.1)
         x1_p = max(0, x1 - pad_w)
@@ -156,51 +163,69 @@ def run_inference(image_path, detector, dist_model, device, focal_length):
         crop_tensor = preprocess_crop(crop).to(device)
         h_pixel = max(1, y2 - y1) 
 
+        # --- PREPROCESSING (GEOMETRIC COORDS) ---
+        # 1. Calculate Normalized Coordinates (0 to 1)
+        # Note: We use the raw box (x1, y1), not the padded one, to match training
+        norm_x = x1 / w_img
+        norm_y = y1 / h_img
+        norm_w = (x2 - x1) / w_img
+        norm_h = (y2 - y1) / h_img
+        
+        # 2. Create Tensor (Batch=1, Features=4)
+        box_tensor = torch.tensor([norm_x, norm_y, norm_w, norm_h], dtype=torch.float32).unsqueeze(0).to(device)
+
         # --- STAGE 2: PREDICT DISTANCE ---
         with torch.no_grad():
-            cls_logits, delta_z = dist_model(crop_tensor)
+            # Pass BOTH image and coords
+            cls_logits, delta_z = dist_model(crop_tensor, box_tensor)
+            
             Z_pin = (focal_length * avg_h) / h_pixel
             Z_final = Z_pin + delta_z.item()
         
         print(f"ID #{i+1} [{kitti_class}]: {Z_final:.2f}m (Pinhole: {Z_pin:.2f}, Delta: {delta_z.item():.2f})")
 
-        # --- IMPROVED VISUALIZATION ---
+        # --- IMPROVED VISUALIZATION (ALTERNATING) ---
         # 1. Get color and create label text with ID
         color = CLASS_COLORS.get(kitti_class, (255, 255, 255))
-        # Shorten distance to 1 decimal place to save space
         label_text = f"#{i+1} {kitti_class} {Z_final:.1f}m"
 
-        # 2. Calculate text size to draw a background box
+        # 2. Calculate text size
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 0.5
         thickness = 1
         (text_width, text_height), baseline = cv2.getTextSize(label_text, font, font_scale, thickness)
         
-        # 3. Determine label position
-        # Default: above the box
+        # 3. Determine Staggered Position
         label_x = x1
-        label_y = y1 - 5 
+        
+        # Logic: Even ID -> Try Top | Odd ID -> Try Bottom
+        if i % 2 == 0:
+            # Try placing ABOVE the box
+            label_y = y1 - 5
+        else:
+            # Try placing BELOW the box
+            label_y = y2 + text_height + 5
 
-        # Smart check: If label goes off top of screen, move it inside the box
+        # 4. Boundary Safety Checks (Clamp to Image Edges)
         if label_y - text_height < 0:
             label_y = y1 + text_height + 10
-            
-        # 4. Draw filled rectangle behind text for readability
-        # Coords for background rect: (top_left_x, top_left_y), (bottom_right_x, bottom_right_y)
+        elif label_y + baseline > h_img:
+            label_y = y2 - 5
+
+        # 5. Draw filled rectangle behind text for readability
         cv2.rectangle(results_img, 
                       (label_x, label_y - text_height - baseline), 
                       (label_x + text_width, label_y + baseline), 
                       color, -1) # -1 thickness means filled
 
-        # 5. Draw the main bounding box
+        # 6. Draw the main bounding box
         cv2.rectangle(results_img, (x1, y1), (x2, y2), color, 2)
         
-        # 6. Draw white text on top of the filled colored rectangle
+        # 7. Draw white text on top
         cv2.putText(results_img, label_text, (label_x, label_y), 
                     font, font_scale, (255, 255, 255), thickness)
 
     return results_img
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--image', type=str, required=True, help="Path to input image")
@@ -216,9 +241,15 @@ if __name__ == "__main__":
     
     # Run
     result = run_inference(args.image, detector, dist_model, device, args.focal)
-    
+        # 1. Get the base name (000053.png)
+    base_name = os.path.basename(args.image)
+
+    # 2. Split the base name from the extension to get '000053'
+    file_id = os.path.splitext(base_name)[0]
     # Show/Save
-    save_path = "prediction_result.jpg"
+    if not os.path.exists("image_predictions"):
+        os.makedirs("image_predictions")
+    save_path = f"image_predictions/prediction_result{file_id}_adjusted.jpg"
     cv2.imwrite(save_path, result)
     print(f"Result saved to {save_path}")
     

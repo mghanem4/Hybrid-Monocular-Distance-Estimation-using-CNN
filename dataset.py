@@ -159,71 +159,76 @@ class KittiObjectDataset(Dataset):
         obj = self.objects[idx]
         img_path = obj['img_path']
         img_id = obj['img_id']
-        img = cv2.imread(obj['img_path'])
+        
         # 1. Load Image
+        img = cv2.imread(obj['img_path'])
         if img is None or img.size == 0:
             logger.error(f"\n[WARNING] Corrupted/Missing image at: {img_path}")
-            logger.error(f"          Returning dummy black image to prevent crash.")
-            
-            # Create a black dummy image of standard KITTI size (Height, Width, Channels)
+            # Create dummy black image
             img = np.zeros((375, 1242, 3), dtype=np.uint8)
         else:
-            # Only convert color if the image is valid
             try:
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             except cv2.error:
-                # Double safety net
-                logger.error(f"\n[ERROR] cv2.cvtColor failed on: {img_path}")
                 img = np.zeros((375, 1242, 3), dtype=np.uint8)
-
-
-        x1, y1, x2, y2 = map(int, obj['box'])
         
-        # add Padding 
-        # Adds 10% context around the box
-        pad_w = int((x2 - x1) * 0.1)
-        pad_h = int((y2 - y1) * 0.1)
+        # Get Dimensions
         h_img, w_img = img.shape[:2]
-        
-        x1 = max(0, x1 - pad_w)
-        y1 = max(0, y1 - pad_h)
-        x2 = min(w_img, x2 + pad_w)
-        y2 = min(h_img, y2 + pad_h)
 
-        crop = img[y1:y2, x1:x2]
+        # 2. Extract Raw Box (Sanitized)
+        # We handle the potential 3D corruption here
+        raw_box = obj['box'] 
+        if isinstance(raw_box, np.ndarray):
+            raw_box = raw_box.flatten()
+            
+        # Take the first 4 elements (x1, y1, x2, y2)
+        # These are the CLEAN coordinates used for the "box" output
+        x1_raw, y1_raw, x2_raw, y2_raw = map(int, raw_box[:4])
+
+        # 3. Prepare Coordinates for Cropping (Padded)
+        # Use the sanitized variables, NOT obj['box']
+        pad_w = int((x2_raw - x1_raw) * 0.1)
+        pad_h = int((y2_raw - y1_raw) * 0.1)
         
-        # Handle edge case where crop is empty
+        x1_pad = max(0, x1_raw - pad_w)
+        y1_pad = max(0, y1_raw - pad_h)
+        x2_pad = min(w_img, x2_raw + pad_w)
+        y2_pad = min(h_img, y2_raw + pad_h)
+
+        # 4. Crop & Resize
+        crop = img[y1_pad:y2_pad, x1_pad:x2_pad]
+        
         if crop.size == 0:
             crop = np.zeros((128, 128, 3), dtype=np.uint8)
 
-        # 3. Resize
         crop = cv2.resize(crop, (128, 128))
-
-        # Convert to PIL Image for torchvision transforms
         crop = Image.fromarray(crop)
 
-        # 4. Get the Average Height for this specific class 
+        # 5. Metadata
         cls_name = obj['class_name']
         avg_h_for_class = self.avg_heights.get(cls_name, 1.5)
 
-        # Calculate pixel height (used for the pinhole model)
-        h_pixel = max(1, y2 - y1)
+        # Calculate pixel height based on the RAW box (better for geometry logic)
+        h_pixel = max(1, y2_raw - y1_raw)
 
         if self.transform:
             crop = self.transform(crop)
         else:
-            # Default to ToTensor if no transform provided (converts to [0,1], CHW)
             crop = transforms.ToTensor()(crop)
             
-        # Look up the integer index using the dictionary built in get_class_stats
         cls_idx = self.class_to_idx[cls_name]
+        
         return {
             'img_id': img_id,
             'image': crop,
+            # Return the CLEAN raw box
+            'box': np.array([x1_raw, y1_raw, x2_raw, y2_raw], dtype=np.float32),
             'bbox_height': np.float32(h_pixel),
             'class_idx': np.int64(cls_idx),
             'class_name': cls_name,
             'avg_height': np.float32(avg_h_for_class),
             'z_gt': np.float32(obj['z_gt']),
-            'focal_length': np.float32(obj['focal_length'])
+            'focal_length': np.float32(obj['focal_length']),
+            'img_width': np.float32(w_img), 
+            'img_height': np.float32(h_img)   
         }

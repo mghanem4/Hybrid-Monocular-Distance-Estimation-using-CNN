@@ -2,91 +2,100 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
+from torchvision.models import ResNet18_Weights
 
 class HybridDistanceModel(nn.Module):
-    def __init__(self, num_classes: int = 3, backbone: str = 'custom'):
+    def __init__(self, num_classes: int = 3, backbone: str = 'resnet18', 
+                 hidden_dim: int = 512, dropout: float = 0.5):
+        """
+        Args:
+            num_classes: Number of output classes (e.g., 8 for KITTI).
+            backbone: 'resnet18' or 'custom'.
+            hidden_dim: Size of the hidden layer in the heads (default 512).
+            dropout: Dropout probability (default 0.5).
+        """
         super(HybridDistanceModel, self).__init__()
         
         self.backbone_type = backbone
+        self.hidden_dim = hidden_dim
+        self.dropout = dropout
 
+        # ---------------------------------------------------------
+        # 1. Image Backbone (The "Eye")
+        # ---------------------------------------------------------
         if backbone == 'resnet18':
-            # Load pretrained ResNet18
-            resnet = models.resnet18(pretrained=True)
-            # Remove the final FC layer (fc) and keep everything else
-            # ResNet18 structure: conv1 -> bn1 -> relu -> maxpool -> layer1 -> layer2 -> layer3 -> layer4 -> avgpool -> fc
-            # usage of children()[:-1] grabs everything up to avgpool
+            resnet = models.resnet18(weights=ResNet18_Weights.DEFAULT)
             self.features = nn.Sequential(*list(resnet.children())[:-1])
-            # ResNet18 output after avgpool is 512 channels
-            self.flatten_dim = 512
+            img_feature_dim = 512  # ResNet output size
             
         else: # 'custom'
-            # ---------------------------------------------------------
-            # CNN Backbone (Lightweight Feature Extractor)
-            # Input: (Batch, 3, 128, 128)
-            # ---------------------------------------------------------
             self.features = nn.Sequential(
-                # Block 1: 128x128 -> 64x64 - Raw pixels (edges, lines)
+                # Block 1
                 nn.Conv2d(3, 32, kernel_size=3, padding=1),
-                nn.BatchNorm2d(32),
-                nn.ReLU(),
-                nn.MaxPool2d(2),
-                
-                # Block 2: 64x64 -> 32x32
+                nn.BatchNorm2d(32), nn.ReLU(), nn.MaxPool2d(2),
+                # Block 2
                 nn.Conv2d(32, 64, kernel_size=3, padding=1),
-                nn.BatchNorm2d(64),
-                nn.ReLU(),
-                nn.MaxPool2d(2),
-                
-                # Block 3: 32x32 -> 16x16
+                nn.BatchNorm2d(64), nn.ReLU(), nn.MaxPool2d(2),
+                # Block 3
                 nn.Conv2d(64, 128, kernel_size=3, padding=1),
-                nn.BatchNorm2d(128),
-                nn.ReLU(),
-                nn.MaxPool2d(2),
-                
-                # Block 4: 16x16 -> 8x8
+                nn.BatchNorm2d(128), nn.ReLU(), nn.MaxPool2d(2),
+                # Block 4
                 nn.Conv2d(128, 256, kernel_size=3, padding=1),
-                nn.BatchNorm2d(256),
-                nn.ReLU(),
-                nn.MaxPool2d(2),
+                nn.BatchNorm2d(256), nn.ReLU(), nn.MaxPool2d(2),
             )
-            # Flattened dimension: 256 channels * 8 * 8 spatial
-            self.flatten_dim = 256 * 8 * 8
+            img_feature_dim = 256 * 8 * 8 # Custom output size
 
         # ---------------------------------------------------------
-        # Classification Head 
-        # Goal: Predict probabilities p_c for {Car, Ped, Cyc}
+        # 2. Geometric MLP
+        # Processes normalized coordinates (x, y, w, h)
+        # ---------------------------------------------------------
+        self.geo_dim = 32
+        self.geo_mlp = nn.Sequential(
+            nn.Linear(4, self.geo_dim), # Input: 4 coords -> Output: 32 features
+            nn.ReLU()
+        )
+
+        # Calculate Total Dimension for the Heads
+        # Image Features + Geometric Features
+        self.flatten_dim = img_feature_dim + self.geo_dim
+
+        # ---------------------------------------------------------
+        # 3. Heads (Now taking the combined input)
         # ---------------------------------------------------------
         self.cls_head = nn.Sequential(
-            nn.Linear(self.flatten_dim, 512),
+            nn.Linear(self.flatten_dim, self.hidden_dim), # <--- Dynamic Hidden Dim
             nn.ReLU(),
-            nn.Dropout(0.5),
-            nn.Linear(512, num_classes) # Output: Logits
+            nn.Dropout(self.dropout),                     # <--- Dynamic Dropout
+            nn.Linear(self.hidden_dim, num_classes)
         )
 
-        # ---------------------------------------------------------
-        # Regression Head (Residual)
-        # Goal: Predict scalar correction delta_Z
-        # ---------------------------------------------------------
         self.reg_head = nn.Sequential(
-            nn.Linear(self.flatten_dim, 512),
+            nn.Linear(self.flatten_dim, self.hidden_dim), # <--- Dynamic Hidden Dim
             nn.ReLU(),
-            nn.Dropout(0.5),
-            nn.Linear(512, 1) # Output: Scalar Delta Z
+            nn.Dropout(self.dropout),                     # <--- Dynamic Dropout
+            nn.Linear(self.hidden_dim, 1)
         )
 
-    def forward(self, x):
+    def forward(self, x, box_coords):
         """
-        Returns:
-            cls_logits: Raw scores for classification (Batch, 3)
-            delta_z: Predicted residual distance (Batch, 1)
+        Args:
+            x: Image crop batch (B, 3, 128, 128)
+            box_coords: Normalized box coordinates (B, 4)
+                        [x_norm, y_norm, w_norm, h_norm]
         """
-        # Feature extraction
+        # A. Process Image
         x = self.features(x)
-        x = x.view(x.size(0), -1) # Flatten
+        x = x.view(x.size(0), -1) # Flatten image features
         
-        # Independent Heads
-        cls_logits = self.cls_head(x)
-        delta_z = self.reg_head(x)
+        # B. Process Coordinates
+        geo = self.geo_mlp(box_coords) # (B, 32)
+        
+        # C. Fusion (Concatenate)
+        combined = torch.cat((x, geo), dim=1) # (B, img_dim + 32)
+        
+        # D. Predict
+        cls_logits = self.cls_head(combined)
+        delta_z = self.reg_head(combined)
         
         return cls_logits, delta_z
 
