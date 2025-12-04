@@ -42,7 +42,6 @@ def crop_from_kitti(img_path, label_line:list, out_size=(128, 128)):
 
 
 
-# Example usage:
 # Replace 'your_directory_path' with the actual path to your directory
 # read_all_txt_files_os('your_directory_path')
 if __name__ == '__main__':
@@ -60,5 +59,5 @@ if __name__ == '__main__':
     for i, img in enumerate(objects_cropped):
         print('Z', objects_Z[i])            
         cv2.imshow("Image Window", img)
-        cv2.waitKey(0)              # keep window alive until a keypress
-        cv2.destroyAllWindows()     # properly tear down Qt windows
+        cv2.waitKey(0)              
+        cv2.destroyAllWindows()   
