@@ -1,8 +1,8 @@
-opencv-python
 numpy
-matplotlib
-pytorch
-loguru
-torchvision
 pandas
+matplotlib
+opencv-python
+loguru
 torch
+torchvision
+opencv-python
