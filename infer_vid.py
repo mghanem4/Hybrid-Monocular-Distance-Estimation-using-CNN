@@ -3,80 +3,144 @@ import cv2
 import numpy as np
 import argparse
 import time
-from torchvision import models, transforms
-from torchvision.models.detection import fasterrcnn_resnet50_fpn, FasterRCNN_ResNet50_FPN_Weights
+from torchvision import transforms
+from torchvision.models.detection import (
+    ssdlite320_mobilenet_v3_large, 
+    SSDLite320_MobileNet_V3_Large_Weights
+)
 from PIL import Image
 import torch.nn.functional as F
-from torchvision.models.detection import fasterrcnn_mobilenet_v3_large_fpn, FasterRCNN_MobileNet_V3_Large_FPN_Weights
 
-from model import HybridDistanceModel
-
-# --------------------------------------------------------------------------
-# CONSTANTS & MAPPINGS
-# --------------------------------------------------------------------------
-
-# --------------------------------------------------------------------------
-# --------------------------------------------------------------------------
-# --------------------------------------------------------------------------
-'''
-
-NOTE: THIS USSES MOBILE DETECTER FOR SPEED
-'''
-# --------------------------------------------------------------------------
-# --------------------------------------------------------------------------
-# --------------------------------------------------------------------------
+# Ensure model.py is in the same directory
+try:
+    from model import HybridDistanceModel
+except ImportError:
+    print("Error: Could not import 'HybridDistanceModel'. Make sure model.py is in this folder.")
+    exit(1)
 
 # --------------------------------------------------------------------------
+# CONSTANTS & GLOBALS
+# --------------------------------------------------------------------------
 
+# These will be populated by the load_custom_model function from the checkpoint
+IDX_TO_CLASS = {}
+AVG_HEIGHTS = {}
+CLASS_COLORS = {}
 
-KITTI_CLASS_TO_IDX = {
-    'Car': 0, 'Cyclist': 1, 'Misc': 2, 'Pedestrian': 3, 
-    'Person_sitting': 4, 'Tram': 5, 'Truck': 6, 'Van': 7
-}
+# COCO IDs to accept from the Region Proposer (SSDLite)
+# We accept these blobs, but let OUR model decide the specific class and height.
+COCO_INTEREST_IDS = [
+    1, # Person
+    2, # Bicycle
+    3, # Car
+    4, # Motorcycle
+    6, # Bus
+    8, # Truck
+]
 
-AVG_HEIGHTS = {
-    'Pedestrian': 1.76, 'Car': 1.53, 'Van': 2.21, 
-    'Person_sitting': 1.27, 'Cyclist': 1.74, 'Truck': 3.25, 
-    'Misc': 1.92, 'Tram': 3.53
-}
-
-COCO_TO_KITTI = {
-    1: 'Pedestrian', 2: 'Cyclist', 3: 'Car', 
-    4: 'Cyclist', 6: 'Truck', 8: 'Truck'
-}
-
-CLASS_COLORS = {
-    'Car': (0, 255, 0), 'Van': (0, 200, 200), 'Truck': (0, 165, 255),
-    'Pedestrian': (0, 0, 255), 'Person_sitting': (50, 50, 200),
-    'Cyclist': (255, 0, 0), 'Tram': (255, 0, 255), 'Misc': (128, 128, 128)
-}
+def generate_colors(classes):
+    """
+    Generates distinct colors for the loaded classes.
+    """
+    colors = {}
+    # Standard palette for common classes to keep it readable
+    standard_palette = {
+        'Car': (0, 255, 0),        'Van': (0, 255, 255),
+        'Truck': (0, 165, 255),    'Pedestrian': (0, 0, 255),
+        'Person_sitting': (0, 0, 128), 'Cyclist': (255, 0, 0),
+        'Tram': (255, 0, 255),     'Misc': (128, 128, 128)
+    }
+    
+    for cls_name in classes:
+        if cls_name in standard_palette:
+            colors[cls_name] = standard_palette[cls_name]
+        else:
+            # Random color for unknown classes
+            np.random.seed(sum(map(ord, cls_name)))
+            colors[cls_name] = tuple(np.random.randint(0, 255, 3).tolist())
+    return colors
 
 # --------------------------------------------------------------------------
 # MODEL LOADING
 # --------------------------------------------------------------------------
 
-# 1. Update Imports
-from torchvision.models.detection import (
-    ssdlite320_mobilenet_v3_large, 
-    SSDLite320_MobileNet_V3_Large_Weights
-)
-
 def get_object_detector(device):
+    """
+    Loads SSDLite (MobileNetV3) for fast region proposal.
+    """
     print("Loading Object Detector (SSDLite 320)...")
-    
-    # This model is optimized for 320x320 resolution inference
     weights = SSDLite320_MobileNet_V3_Large_Weights.DEFAULT
     model = ssdlite320_mobilenet_v3_large(weights=weights)
-    
     model.to(device)
     model.eval()
     return model
-def load_distance_model(checkpoint_path, device):
-    print(f"Loading Distance Model from {checkpoint_path}...")
-    # NOTE: Ensure this matches your trained model (e.g. hidden_dim=512)
-    model = HybridDistanceModel(num_classes=8, backbone='resnet18') 
+
+def load_custom_model(checkpoint_path, device, backbone_type='resnet18'):
+    """
+    Loads your trained HybridDistanceModel and extracts metadata.
+    """
+    print(f"Loading Custom Model from {checkpoint_path}...")
+    
+    # Load the file first to check metadata
     checkpoint = torch.load(checkpoint_path, map_location=device)
-    model.load_state_dict(checkpoint)
+    
+    # ---------------------------------------------------------
+    # 1. EXTRACT METADATA
+    # ---------------------------------------------------------
+    global IDX_TO_CLASS, AVG_HEIGHTS, CLASS_COLORS
+    
+    if 'class_to_idx' in checkpoint and 'avg_heights' in checkpoint:
+        print("Metadata found in checkpoint. Updating globals...")
+        class_to_idx = checkpoint['class_to_idx']
+        AVG_HEIGHTS = checkpoint['avg_heights']
+        
+        # Create reverse mapping
+        IDX_TO_CLASS = {v: k for k, v in class_to_idx.items()}
+        # Generate colors
+        CLASS_COLORS = generate_colors(class_to_idx.keys())
+        
+        num_classes = len(class_to_idx)
+    else:
+        # Fallback if using an old checkpoint without metadata
+        print("[WARNING] No metadata in checkpoint. Using hardcoded defaults.")
+        KITTI_CLASSES = ['Car', 'Cyclist', 'Misc', 'Pedestrian', 'Person_sitting', 'Tram', 'Truck', 'Van']
+        IDX_TO_CLASS = {i: n for i, n in enumerate(KITTI_CLASSES)}
+        num_classes = 8
+        # Fill AVG_HEIGHTS with generic defaults if missing
+        AVG_HEIGHTS = {'Car': 1.53, 'Pedestrian': 1.76, 'Cyclist': 1.74} 
+        CLASS_COLORS = generate_colors(KITTI_CLASSES)
+
+    # ---------------------------------------------------------
+    # 2. INITIALIZE MODEL
+    # ---------------------------------------------------------
+    # Initialize with same params as training
+    model = HybridDistanceModel(
+        num_classes=num_classes, 
+        backbone=backbone_type,
+        hidden_dim=512, 
+        dropout=0.5
+    ) 
+    
+    # ---------------------------------------------------------
+    # 3. PREPARE WEIGHTS 
+    # ---------------------------------------------------------
+    if 'state_dict' in checkpoint:
+        state_dict = checkpoint['state_dict']
+    else:
+        state_dict = checkpoint.copy()
+        # Remove metadata keys that would confuse load_state_dict
+        keys_to_remove = ['class_to_idx', 'avg_heights', 'config', 'epoch', 'best_mae']
+        for key in keys_to_remove:
+            if key in state_dict:
+                del state_dict[key]
+
+    # Load Weights
+    try:
+        model.load_state_dict(state_dict, strict=True)
+    except RuntimeError as e:
+        print(f"Warning: Strict loading failed. Retrying with strict=False...")
+        model.load_state_dict(state_dict, strict=False)
+        
     model.to(device)
     model.eval()
     return model
@@ -97,7 +161,7 @@ def process_frame(frame, detector, dist_model, device, focal_length):
     img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     img_tensor = transforms.ToTensor()(img_rgb).to(device).unsqueeze(0)
 
-    # 2. Object Detection
+    # 2. Object Detection (Region Proposals)
     with torch.no_grad():
         detections = detector(img_tensor)[0]
 
@@ -110,17 +174,15 @@ def process_frame(frame, detector, dist_model, device, focal_length):
     h_img, w_img, _ = frame.shape
     
     # --- BATCH PREPARATION ---
-    valid_detections = [] # To store metadata for later drawing
-    crop_tensors = []     # To store images for batch inference
-    box_tensors = []      # To store coords for batch inference
+    valid_detections = [] # Metadata for drawing
+    crop_tensors = []     # For batch inference
+    box_tensors = []      # For batch inference
     
     for i, (box, label_idx) in enumerate(zip(boxes, labels)):
-        if label_idx not in COCO_TO_KITTI:
+        # Filter: Only process if it is a road object (Car, Person, Bus, etc.)
+        if int(label_idx) not in COCO_INTEREST_IDS:
             continue
             
-        kitti_class = COCO_TO_KITTI[int(label_idx)]
-        avg_h = AVG_HEIGHTS[kitti_class]
-
         # Coordinates
         x1, y1, x2, y2 = map(int, box)
         
@@ -133,11 +195,11 @@ def process_frame(frame, detector, dist_model, device, focal_length):
         crop = Image.fromarray(img_rgb[y1_p:y2_p, x1_p:x2_p])
         if crop.size[0] == 0 or crop.size[1] == 0: continue
         
-        # Preprocess Crop
-        crop_t = preprocess_crop(crop) # Returns (1, 3, 128, 128)
+        # A. Preprocess Crop
+        crop_t = preprocess_crop(crop) # (1, 3, 128, 128)
         crop_tensors.append(crop_t)
         
-        # Preprocess Coords
+        # B. Preprocess Coords
         norm_x = x1 / w_img
         norm_y = y1 / h_img
         norm_w = (x2 - x1) / w_img
@@ -145,42 +207,47 @@ def process_frame(frame, detector, dist_model, device, focal_length):
         box_t = torch.tensor([norm_x, norm_y, norm_w, norm_h], dtype=torch.float32).unsqueeze(0)
         box_tensors.append(box_t)
         
-        # Store metadata to draw later
+        # Store box for drawing later
         valid_detections.append({
             'box': (x1, y1, x2, y2),
-            'class': kitti_class,
-            'avg_h': avg_h,
-            'h_pixel': max(1, y2 - y1),
-            'id': i+1
+            'h_pixel': max(1, y2 - y1)
         })
 
     # If no objects found, return early
     if not valid_detections:
         return frame
 
-    # --- BATCH INFERENCE (1 Run instead of N) ---
-    # Stack lists into tensors: (Batch_Size, C, H, W)
+    # --- BATCH INFERENCE (1 Run) ---
     batch_crops = torch.cat(crop_tensors).to(device)
     batch_boxes = torch.cat(box_tensors).to(device)
 
     with torch.no_grad():
+        # Run your Custom Model
         cls_logits, delta_z = dist_model(batch_crops, batch_boxes)
-        # delta_z is shape (Batch, 1)
+        
+        # 1. Get Probabilities & Predictions
+        probs = F.softmax(cls_logits, dim=1)
+        pred_indices = torch.argmax(probs, dim=1).cpu().numpy()
+        delta_z = delta_z.cpu().numpy().flatten()
 
     # --- DRAWING LOOP ---
     for i, det in enumerate(valid_detections):
-        # Retrieve batch result
-        d_z = delta_z[i].item()
+        # 1. Get Predicted Class from Custom Model
+        pred_idx = pred_indices[i]
+        class_name = IDX_TO_CLASS.get(pred_idx, 'Unknown')
         
-        # Calculate Pinhole
-        Z_pin = (focal_length * det['avg_h']) / det['h_pixel']
+        # 2. Get True Average Height for that class
+        avg_h = AVG_HEIGHTS.get(class_name, 1.5)
+        
+        # 3. Calculate Distance
+        d_z = delta_z[i]
+        Z_pin = (focal_length * avg_h) / det['h_pixel']
         Z_final = Z_pin + d_z
         
-        # Draw
+        # 4. Draw
         x1, y1, x2, y2 = det['box']
-        kitti_class = det['class']
-        color = CLASS_COLORS.get(kitti_class, (255, 255, 255))
-        label_text = f"{kitti_class} {Z_final:.1f}m"
+        color = CLASS_COLORS.get(class_name, (255, 255, 255))
+        label_text = f"{class_name} {Z_final:.1f}m"
         
         font = cv2.FONT_HERSHEY_SIMPLEX
         (tw, th), baseline = cv2.getTextSize(label_text, font, 0.5, 1)
@@ -200,7 +267,8 @@ def process_frame(frame, detector, dist_model, device, focal_length):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--source', type=str, default='0', help="Camera ID (0) or Video Path")
-    parser.add_argument('--checkpoint', type=str, default='experiments/exp_01_lr0.001_resnet18/best_model.pth')
+    parser.add_argument('--checkpoint', type=str, default='best_model_supermodel.pth', help="Path to your .pth file")
+    parser.add_argument('--backbone', type=str, default='resnet18', help="Backbone type (resnet18/custom)")
     # Use a lower focal length for webcams (usually ~600-800 pixels width)
     parser.add_argument('--focal', type=float, default=800.0, help="Approx focal length")
     args = parser.parse_args()
@@ -210,7 +278,8 @@ def main():
 
     # Load Models
     detector = get_object_detector(device)
-    dist_model = load_distance_model(args.checkpoint, device)
+    # This will load weights + metadata (heights/classes)
+    dist_model = load_custom_model(args.checkpoint, device, args.backbone)
 
     # Handle Source
     source = int(args.source) if args.source.isdigit() else args.source
@@ -227,15 +296,15 @@ def main():
     while True:
         ret, frame = cap.read()
         if not ret: break
-        frame = cv2.resize(frame, (640, 480))
+        
+        # Optional: Resize for speed/consistency
+        # frame = cv2.resize(frame, (1280, 720)) 
+        
         # Calculate FPS
         curr_time = time.time()
         fps = 1 / (curr_time - prev_time) if prev_time > 0 else 0
         prev_time = curr_time
 
-        # Resize for speed if needed (e.g. 640 width)
-        # frame = cv2.resize(frame, (640, 480)) 
-        
         result_frame = process_frame(frame, detector, dist_model, device, args.focal)
 
         # Draw FPS

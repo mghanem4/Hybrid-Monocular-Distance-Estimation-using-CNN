@@ -187,7 +187,7 @@ def evaluate(model, loader, class_heights, device):
             box_coords = torch.stack([bn_x1, bn_y1, bn_w, bn_h], dim=1)
             # ---------------------------------------------------------
 
-            # UPDATE: Pass both inputs to the model
+            #Pass both inputs to the model
             cls_logits, delta_z = model(imgs, box_coords)
             # softmax prob to get class preds
             probs = F.softmax(cls_logits, dim=1)
