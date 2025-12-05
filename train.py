@@ -17,16 +17,50 @@ from loguru import logger
 # --------------------------------------------------------------------------
 # CONFIGURATION
 # --------------------------------------------------------------------------
+# SUPERMODEL CONFIG
 DEFAULT_CONFIG = {
-    'batch_size': 32,
-    'lr': 0.0005,
+    'batch_size': 64,
+    'lr': 0.0001,
     'epochs': 20,
-    'weight_decay': 1e-4,
-    'lambda_reg': 1.0,
+    'weight_decay': 0.0,
+    'lambda_reg': 10,
     'backbone': 'resnet18',
+    'step_size': 10,
+    'dropout': 0.5,
     'device': torch.device("cuda" if torch.cuda.is_available() else "cpu"),
     'save_dir': '.' # Default to current dir
 }
+# DEFAULT_CONFIG = {
+#     'batch_size': 32,
+#     'lr': 0.0005,
+#     'epochs': 20,
+#     'weight_decay': 1e-4,
+#     'lambda_reg': 1.0,
+#     'backbone': 'resnet18',
+#     'device': torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+#     'save_dir': '.' # Default to current dir
+# }
+def compute_dataset_stats(dataset):
+    """
+    Computes the mean and standard deviation of the dataset for normalization.
+    """
+    logger.info("Computing dataset statistics...")
+    loader = DataLoader(dataset, batch_size=64, num_workers=4, shuffle=False)
+    mean = 0.
+    std = 0.
+    nb_samples = 0.
+    for batch in loader:
+        data = batch['image'] 
+        batch_samples = data.size(0)
+        data = data.view(batch_samples, data.size(1), -1)
+        mean += data.mean(2).sum(0)
+        std += data.std(2).sum(0)
+        nb_samples += batch_samples
+    
+    mean /= nb_samples
+    std /= nb_samples
+    logger.info(f"Dataset Mean: {mean}, Std: {std}")
+    return mean, std
 
 def get_class_height_tensor(dataset: KittiObjectDataset, device):
     """
@@ -248,19 +282,35 @@ def train_model(config=DEFAULT_CONFIG):
     logger.info(f"Starting Training with config: {config}")
 
     # 1. Transforms
-    """
-    When PyTorch trained this ResNet on the massive ImageNet dataset (14 million images), 
-    they normalized every image using specifically mean=[0.485, 0.456, 0.406] and std=[0.229, 0.224, 0.225].
-    """
+    
+    # --- STEP 1: Compute Stats ---
+    if config['backbone'] == 'custom':
+        logger.info("Computing dataset statistics for custom backbone...")
+        # Basic transform without Normalize
+        temp_transform = transforms.Compose([
+            transforms.Resize((128, 128)), # Ensure size matches
+            transforms.ToTensor()
+        ])
+        temp_ds = KittiObjectDataset(mode='train', transform=temp_transform)
+        mean, std = compute_dataset_stats(temp_ds)
+        norm_mean = mean.tolist()
+        norm_std = std.tolist()
+    else:
+        # Use ImageNet stats for ResNet
+        norm_mean = [0.485, 0.456, 0.406]
+        norm_std = [0.229, 0.224, 0.225]
+
+    logger.info(f"Using Normalization -> Mean: {norm_mean}, Std: {norm_std}")
+
     train_transform = transforms.Compose([
         transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
         transforms.RandomHorizontalFlip(p=0.5),
         transforms.ToTensor(), 
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=norm_mean, std=norm_std)
     ])
     val_transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=norm_mean, std=norm_std)
     ])
 
     # 2. Data
@@ -317,11 +367,21 @@ def train_model(config=DEFAULT_CONFIG):
             
             logger.debug(f"  Train MAE: {train_mae:.2f}m | Val MAE: {metrics['mae']:.2f}m | Val Acc: {metrics['accuracy']:.2f}")
 
-            # Save Best
             if metrics['mae'] < best_mae:
                 best_mae = metrics['mae']
-                torch.save(model.state_dict(), os.path.join(save_dir, 'best_model.pth'))
-    
+                
+                # Create a comprehensive dictionary
+                checkpoint_data = {
+                    'epoch': epoch + 1,
+                    'state_dict': model.state_dict(),
+                    'best_mae': best_mae,
+                    # --- SAVE METADATA ---
+                    'class_to_idx': train_ds.class_to_idx,
+                    'avg_heights': train_ds.avg_heights,
+                    'config': config
+                }
+                logger.info(checkpoint_data)                
+                torch.save(checkpoint_data, os.path.join(save_dir, 'best_model_supermodel.pth'))
     logger.debug("Training Complete.")
     return best_mae
 

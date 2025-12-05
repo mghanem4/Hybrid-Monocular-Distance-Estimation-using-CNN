@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
 from torchvision.models import ResNet18_Weights
+from loguru import logger
 
 class HybridDistanceModel(nn.Module):
     def __init__(self, num_classes: int = 3, backbone: str = 'resnet18', 
@@ -27,8 +28,11 @@ class HybridDistanceModel(nn.Module):
             resnet = models.resnet18(weights=ResNet18_Weights.DEFAULT)
             self.features = nn.Sequential(*list(resnet.children())[:-1])
             img_feature_dim = 512  # ResNet output size
+            logger.debug("Using ResNet18 Backbone.")
+
             
         else: # 'custom'
+            logger.debug("Using a custom 4 block CNN.")
             self.features = nn.Sequential(
                 # Block 1
                 nn.Conv2d(3, 32, kernel_size=3, padding=1),

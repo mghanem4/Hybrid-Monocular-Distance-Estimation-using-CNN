@@ -221,7 +221,6 @@ class KittiObjectDataset(Dataset):
         return {
             'img_id': img_id,
             'image': crop,
-            # Return the CLEAN raw box
             'box': np.array([x1_raw, y1_raw, x2_raw, y2_raw], dtype=np.float32),
             'bbox_height': np.float32(h_pixel),
             'class_idx': np.int64(cls_idx),

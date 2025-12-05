@@ -2,7 +2,6 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 from loguru import logger
-
 def plot_experiments(experiment_root="experiments_ofat"):
     """
     Scans the experiment_root directory.
@@ -101,7 +100,7 @@ def plot_experiments(experiment_root="experiments_ofat"):
 
     logger.info(f"All plots saved to {output_dir}/")
 
-def plot_trained_metrics(fp):
+def plot_trained_metrics(fp, save_dir= "."):
     data = pd.read_csv(fp)
     # --- PART 1: Plot metrics One by One ---
     # 1. Training Loss
@@ -113,7 +112,7 @@ def plot_trained_metrics(fp):
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.legend()
     plt.tight_layout()
-    plt.savefig("training_loss_plot.png")
+    plt.savefig(os.path.join(save_dir, "training_loss_plot.png"))
 
     # 2. Error Metrics
     plt.figure(figsize=(8, 6))
@@ -126,7 +125,7 @@ def plot_trained_metrics(fp):
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.legend()
     plt.tight_layout()
-    plt.savefig("error_metrics.png")
+    plt.savefig(os.path.join(save_dir, "error_metrics.png"))
 
     # 3. Performance Scores
     plt.figure(figsize=(8, 6))
@@ -140,7 +139,7 @@ def plot_trained_metrics(fp):
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.legend(loc='lower right')
     plt.tight_layout()
-    plt.savefig("perform_score.png")
+    plt.savefig(os.path.join(save_dir, "perform_score.png"))
 
     # --- PART 2: Plot All Together ---
     
@@ -180,9 +179,9 @@ def plot_trained_metrics(fp):
         ax.set_xlabel('Epoch')
 
     plt.tight_layout()
-    plt.savefig("combined_metrics.png")
+    plt.savefig(os.path.join(save_dir,"combined_metrics.png"))
     plt.show()
 
 if __name__ == "__main__":
-    plot_trained_metrics("metrics.csv")
+    plot_trained_metrics("custom_best_model/metrics.csv")
     # plot_experiments()
