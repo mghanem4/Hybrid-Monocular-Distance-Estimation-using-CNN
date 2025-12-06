@@ -13,6 +13,16 @@ Install dependencies  using pip:
 pip install -r requirements.txt
 ```
 >[!important] Large files are excluded from this repo for portability. Including a 12GB dataset won't do anyone any good and will just slow down the process. To download the dataset separately, please visit the dataset website (included in references) **KITTI Vision Benchmark Suite.** [Website](http://www.cvlibs.net/datasets/kitti/)
+> To counter this issue, I have uploaded a pickle file of all the training, calibration, and label sets in the config folder, thank you for understanding
+
+After cloning the repo and installing the packages from the requirements text file, you can start inference by running this command (make sure you are in the root directory)
+
+```bash
+python infer.py --checkpoint resnet18_model/best_model.pth --image unseen_photos/000229.png
+```
+
+Since the image file is too large to publish on github, I added a random subset of photos from the dataset to "unseen_photos", feel free to pick any of them to infer. You can also play around more with the repo by downloading the dataset from the website.
+
 
 # Downloading Dataset
 Due to the large content of this dataset, please follow the instructions below to download the dataset and you use the model.
@@ -25,6 +35,14 @@ Due to the large content of this dataset, please follow the instructions below t
     - Download training labels of object data set (5 MB)
     - [Optional] Download object development kit (1 MB) (including 3D object detection and bird's eye view evaluation code)
 
+> [! WARNING]
+> This is not intended for actual use on the road, or of any purpose. This is an experimentation for using a heuristic (pinhole camera model) to predict distances, although an MAE of $\approx 1.03$ was achieved, this is not a very accurate, proceed with caution
+
+
+> [! WARNING]
+> There also exists a way to infer real time video with fps of 7~10, please be advised that I do not own the source code or libraries of that code, so please be cautious of use of privay issues
+
+Below is the proposal for this project.
 
 ---
 # Hybrid Monocular Distance Estimation using CNN + Pinhole Residual
