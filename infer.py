@@ -7,6 +7,7 @@ from torchvision import models, transforms
 from torchvision.models.detection import fasterrcnn_resnet50_fpn
 from PIL import Image
 import torch.nn.functional as F
+from loguru import logger
 
 # Import your custom model definition
 from model import HybridDistanceModel 
@@ -15,7 +16,7 @@ from model import HybridDistanceModel
 # CONSTANTS & CONFIG
 # --------------------------------------------------------------------------
 
-# 1. MATCH THIS TO YOUR TRAINING DATASET CLASS ORDER
+# 1. MATCH THIS TO YOUR TRAINING DATASET CLASS ORDER, make sure if running this a new dataset, you change the below, I did not include the dataset on github so I should be good on hard coding this
 # This must match exactly how KittiObjectDataset assigns indices.
 # Hard coded for now
 #  {'Car': 0, 'Cyclist': 1, 'Misc': 2, 'Pedestrian': 3, 'Person_sitting': 4, 'Tram': 5, 'Truck': 6, 'Van': 7}
@@ -58,7 +59,7 @@ def get_region_proposer(device):
     """
     Loads standard Faster R-CNN to find boxes only.
     """
-    print("Loading Region Proposer (Faster R-CNN)...")
+    logger.debug("Loading Region Proposer (Faster R-CNN)...")
     weights = models.detection.FasterRCNN_ResNet50_FPN_Weights.DEFAULT
     model = fasterrcnn_resnet50_fpn(weights=weights)
     model.to(device)
@@ -87,7 +88,7 @@ def load_custom_model(checkpoint_path, device, backbone_type='resnet18'):
     # 1. EXTRACT METADATA
     # ---------------------------------------------------------
     if 'class_to_idx' in checkpoint and 'avg_heights' in checkpoint:
-        print("Metadata found in checkpoint. Updating globals...")
+        logger.debug("Metadata found in checkpoint. Updating globals...")
         # Update Global Variables
         global IDX_TO_CLASS, AVG_HEIGHTS
         IDX_TO_CLASS = {v: k for k, v in checkpoint['class_to_idx'].items()}
@@ -96,11 +97,11 @@ def load_custom_model(checkpoint_path, device, backbone_type='resnet18'):
     # ---------------------------------------------------------
     # 2. PREPARE WEIGHTS 
     # ---------------------------------------------------------
-    # A. If the weights are nested under 'state_dict' (Best Practice)
+    # A. If the weights are nested under 'state_dict' 
     if 'state_dict' in checkpoint:
         state_dict = checkpoint['state_dict']
         
-    # B. If the file is a flat mix of weights + metadata (Your current situation)
+    # B. If the file is a flat mix of weights + metadata 
     else:
         state_dict = checkpoint.copy() # Make a copy so we don't break the original
         
@@ -115,7 +116,7 @@ def load_custom_model(checkpoint_path, device, backbone_type='resnet18'):
     try:
         model.load_state_dict(state_dict, strict=True)
     except RuntimeError as e:
-        print(f"Warning: Strict loading failed ({e}). Trying strict=False...")
+        logger.error(f"Warning: Strict loading failed ({e}). Trying strict=False...")
         model.load_state_dict(state_dict, strict=False)
         
     model.to(device)
@@ -152,7 +153,7 @@ def run_inference(image_path, proposer, my_model, device, focal_length):
             
     boxes = proposals['boxes'][keep_indices].cpu().numpy()
     
-    print(f"Region Proposer found {len(boxes)} regions of interest.")
+    logger.debug(f"Region Proposer found {len(boxes)} regions of interest.")
     
     results = []
 
@@ -197,7 +198,7 @@ def run_inference(image_path, proposer, my_model, device, focal_length):
             Z_final = Z_pin + correction
 
             # --- PRINT DEBUG INFO ---
-            print(f"{pred_class_name:<12} | {Z_pin:<12.2f} | {correction:<15.2f} | {Z_final:<12.2f}")
+            logger.debug(f"{pred_class_name:<12} | {Z_pin:<12.2f} | {correction:<15.2f} | {Z_final:<12.2f}")
 
         # Save result
         results.append({

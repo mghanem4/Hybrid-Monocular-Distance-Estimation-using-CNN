@@ -107,13 +107,11 @@ def run_experiments():
                     
             except Exception as e:
                 logger.error(f"Experiment {dir_name} Failed: {e}")
-                # Optional: print full traceback if debugging
-                # import traceback; traceback.print_exc()
+
 
     logger.info("\nAll Experiments Completed.")
     
     # Generate Plots
-    # Note: You might need to update plot_experiments to handle this new folder structure if it relies on specific naming
     logger.info("Generating Plots...")
     try:
         plot_experiments(experiment_root)

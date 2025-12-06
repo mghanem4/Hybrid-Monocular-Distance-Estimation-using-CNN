@@ -186,7 +186,6 @@ class KittiObjectDataset(Dataset):
         x1_raw, y1_raw, x2_raw, y2_raw = map(int, raw_box[:4])
 
         # 3. Prepare Coordinates for Cropping (Padded)
-        # Use the sanitized variables, NOT obj['box']
         pad_w = int((x2_raw - x1_raw) * 0.1)
         pad_h = int((y2_raw - y1_raw) * 0.1)
         

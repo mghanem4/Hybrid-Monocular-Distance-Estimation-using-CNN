@@ -30,7 +30,7 @@ def plot_experiments(experiment_root="experiments_ofat"):
         parts = d.split("_var_")
         if len(parts) < 2: continue
         
-        # This part is tricky (value might contain underscores), so we use known keys
+        # This part is tricky (value might contain underscores), so  use known keys
         rest = parts[1] # e.g. "learning_rate_0.001" or "backbone_resnet18"
         
         # Identify the parameter name

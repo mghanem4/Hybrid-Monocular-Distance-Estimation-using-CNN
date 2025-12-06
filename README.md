@@ -1,4 +1,8 @@
-# Add Initialization steps (TBD)
+
+# Hybrid Monocular Distance Estimation using CNN + Pinhole Residual
+## Mohamad Ghanem, 101192896, Group Number 195
+
+# Initialization steps 
 Install requirements using conda:
 ```bash
 conda create --name PROJ3106 python=3.10 -c conda-forge
@@ -7,19 +11,22 @@ Activate Conda environment:
 ```bash
 conda activate PROJ3106
 ```
-
 Install dependencies  using pip:
 ```bash
 pip install -r requirements.txt
 ```
+
 >[!important] Large files are excluded from this repo for portability. Including a 12GB dataset won't do anyone any good and will just slow down the process. To download the dataset separately, please visit the dataset website (included in references) **KITTI Vision Benchmark Suite.** [Website](http://www.cvlibs.net/datasets/kitti/)
-> To counter this issue, I have uploaded a pickle file of all the training, calibration, and label sets in the config folder, thank you for understanding
+> To counter this issue, I have uploaded a pickle file of all the training, calibration, and label sets in the cache folder, thank you for understanding
 
 After cloning the repo and installing the packages from the requirements text file, you can start inference by running this command (make sure you are in the root directory)
 
 ```bash
 python infer.py --checkpoint resnet18_model/best_model.pth --image unseen_photos/000229.png
 ```
+
+You can use any model checkpoint you would like to investigate, resnet18_model contains the model with the ResNet-18 pre trained weights.
+custom_best_model contains the model with the custom 4 block CNN.
 
 Since the image file is too large to publish on github, I added a random subset of photos from the dataset to "unseen_photos", feel free to pick any of them to infer. You can also play around more with the repo by downloading the dataset from the website.
 
@@ -43,6 +50,26 @@ Due to the large content of this dataset, please follow the instructions below t
 > There also exists a way to infer real time video with fps of 7~10, please be advised that I do not own the source code or libraries of that code, so please be cautious of use of privay issues
 
 Below is the proposal for this project.
+
+
+You can also get the recommended input size for the NN by running
+```bash
+python img_size.py
+```
+You should see an output something like:
+```txt
+Analyzing 32461 objects...
+------------------------------
+Count:  32461
+WIDTH:  Min: 0.1, Max: 581.4, Avg: 101.2, Median: 68.7
+HEIGHT: Min: 12.7, Max: 375.0, Avg: 73.4, Median: 52.4
+------------------------------
+Data suggests a resolution around: 93 x 93
+Success! Plot saved to 'distribution_plot.png' in your current folder.
+```
+Pick a higher resolution size to avoid data loss, like in this case $128 \times 128$
+You will also see a distribution plot of WxH
+
 
 ---
 # Hybrid Monocular Distance Estimation using CNN + Pinhole Residual

@@ -10,6 +10,7 @@ from torchvision.models.detection import (
 )
 from PIL import Image
 import torch.nn.functional as F
+from loguru import logger
 
 # Ensure model.py is in the same directory
 try:
@@ -68,7 +69,7 @@ def get_object_detector(device):
     """
     Loads SSDLite (MobileNetV3) for fast region proposal.
     """
-    print("Loading Object Detector (SSDLite 320)...")
+    logger.info("Loading Object Detector (SSDLite 320)...")
     weights = SSDLite320_MobileNet_V3_Large_Weights.DEFAULT
     model = ssdlite320_mobilenet_v3_large(weights=weights)
     model.to(device)
@@ -79,10 +80,10 @@ def load_custom_model(checkpoint_path, device, backbone_type='resnet18'):
     """
     Loads your trained HybridDistanceModel and extracts metadata.
     """
-    print(f"Loading Custom Model from {checkpoint_path}...")
+    logger.info(f"Loading Custom Model from {checkpoint_path}...")
     
     # Load the file first to check metadata
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     
     # ---------------------------------------------------------
     # 1. EXTRACT METADATA
@@ -90,7 +91,7 @@ def load_custom_model(checkpoint_path, device, backbone_type='resnet18'):
     global IDX_TO_CLASS, AVG_HEIGHTS, CLASS_COLORS
     
     if 'class_to_idx' in checkpoint and 'avg_heights' in checkpoint:
-        print("Metadata found in checkpoint. Updating globals...")
+        logger.debug("Metadata found in checkpoint. Updating globals...")
         class_to_idx = checkpoint['class_to_idx']
         AVG_HEIGHTS = checkpoint['avg_heights']
         
@@ -102,12 +103,12 @@ def load_custom_model(checkpoint_path, device, backbone_type='resnet18'):
         num_classes = len(class_to_idx)
     else:
         # Fallback if using an old checkpoint without metadata
-        print("[WARNING] No metadata in checkpoint. Using hardcoded defaults.")
+        logger.warning("[WARNING] No metadata in checkpoint. Using hardcoded defaults.")
         KITTI_CLASSES = ['Car', 'Cyclist', 'Misc', 'Pedestrian', 'Person_sitting', 'Tram', 'Truck', 'Van']
         IDX_TO_CLASS = {i: n for i, n in enumerate(KITTI_CLASSES)}
         num_classes = 8
         # Fill AVG_HEIGHTS with generic defaults if missing
-        AVG_HEIGHTS = {'Car': 1.53, 'Pedestrian': 1.76, 'Cyclist': 1.74} 
+        AVG_HEIGHTS = {'Car': 1.5219423839917103, 'Misc': 1.8312886597938152, 'Pedestrian': 1.762166064981948, 'Truck': 3.2293119266055053, 'Van': 2.200273037542662, 'Cyclist': 1.7258785942492014, 'Tram': 3.539541284403669, 'Person_sitting': 1.2773584905660378} 
         CLASS_COLORS = generate_colors(KITTI_CLASSES)
 
     # ---------------------------------------------------------
@@ -138,7 +139,7 @@ def load_custom_model(checkpoint_path, device, backbone_type='resnet18'):
     try:
         model.load_state_dict(state_dict, strict=True)
     except RuntimeError as e:
-        print(f"Warning: Strict loading failed. Retrying with strict=False...")
+        logger.error(f"Warning: Strict loading failed. Retrying with strict=False...")
         model.load_state_dict(state_dict, strict=False)
         
     model.to(device)
@@ -296,9 +297,6 @@ def main():
     while True:
         ret, frame = cap.read()
         if not ret: break
-        
-        # Optional: Resize for speed/consistency
-        # frame = cv2.resize(frame, (1280, 720)) 
         
         # Calculate FPS
         curr_time = time.time()
