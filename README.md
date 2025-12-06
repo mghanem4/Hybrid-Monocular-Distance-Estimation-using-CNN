@@ -48,7 +48,7 @@ Due to the large content of this dataset, please follow the instructions below t
 
 > [! WARNING]
 > There also exists a way to infer real time video with fps of 7~10, please be advised that I do not own the source code or libraries of that code, so please be cautious of use of privay issues
-
+> Using the video inference violates the i.i.d (independent, identically distributed) assumption as the video frames are not from the trained dataset and therefore are extremely inaccurate, it was just fun to watch.
 Below is the proposal for this project.
 
 
