@@ -24,7 +24,16 @@ KITTI_CLASSES = [
     'Car', 'Cyclist', 'Misc', 'Pedestrian', 
     'Person_sitting', 'Tram', 'Truck', 'Van'
 ]
-
+CLASS_COLORS = {
+    'Car': (1, 50, 32),        # Green
+    'Van': (0, 200, 200),      # Yellowish-Green
+    'Truck': (0, 165, 255),    # Orange
+    'Pedestrian': (0, 0, 255), # Red
+    'Person_sitting': (50, 50, 200), # Dark Red
+    'Cyclist': (255, 0, 0),    # Blue
+    'Tram': (255, 0, 255),     # Magenta
+    'Misc': (128, 128, 128)    # Gray
+}
 # index mapping
 IDX_TO_CLASS = {i: name for i, name in enumerate(KITTI_CLASSES)}
 
@@ -41,7 +50,6 @@ COCO_INTEREST_IDS = [1, 2, 3, 4, 6, 8] # Person, Bike, Car, Motor, Bus, Truck
 # Placeholder globals (will be populated by load_custom_model)
 IDX_TO_CLASS = {}
 AVG_HEIGHTS = {}
-CLASS_COLORS = {} # We can generate these dynamically or keep hardcoded defaults
 
 def generate_colors(classes):
     """
