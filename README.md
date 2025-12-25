@@ -1,6 +1,6 @@
 
 # Hybrid Monocular Distance Estimation using CNN + Pinhole Residual
-## Mohamad Ghanem, 101192896, Group Number 195
+## Mohamad Ghanem
 
 # Initialization steps 
 Install requirements using conda:
