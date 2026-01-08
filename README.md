@@ -16,7 +16,7 @@ Install dependencies  using pip:
 pip install -r requirements.txt
 ```
 
->[!important] Large files are excluded from this repo for portability. Including a 12GB dataset won't do anyone any good and will just slow down the process. To download the dataset separately, please visit the dataset website (included in references) **KITTI Vision Benchmark Suite.** [Website](http://www.cvlibs.net/datasets/kitti/)
+>[!note] Large files are excluded from this repo for portability. Including a 12GB dataset won't do anyone any good and will just slow down the process. To download the dataset separately, please visit the dataset website (included in references) **KITTI Vision Benchmark Suite.** [Website](http://www.cvlibs.net/datasets/kitti/)
 > To counter this issue, I have uploaded a pickle file of all the training, calibration, and label sets in the cache folder, thank you for understanding
 
 After cloning the repo and installing the packages from the requirements text file, you can start inference by running this command (make sure you are in the root directory)
@@ -42,11 +42,11 @@ Due to the large content of this dataset, please follow the instructions below t
     - Download training labels of object data set (5 MB)
     - [Optional] Download object development kit (1 MB) (including 3D object detection and bird's eye view evaluation code)
 
-> [! WARNING]
+> [!warning]
 > This is not intended for actual use on the road, or of any purpose. This is an experimentation for using a heuristic (pinhole camera model) to predict distances, although an MAE of $\approx 1.03$ was achieved, this is not a very accurate, proceed with caution
 
 
-> [! WARNING]
+> [!warning]
 > There also exists a way to infer real time video with fps of 7~10, please be advised that I do not own the source code or libraries of that code, so please be cautious of use of privay issues
 > Using the video inference violates the i.i.d (independent, identically distributed) assumption as the video frames are not from the trained dataset and therefore are extremely inaccurate, it was just fun to watch.
 Below is the proposal for this project.
