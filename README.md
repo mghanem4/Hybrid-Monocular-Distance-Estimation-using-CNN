@@ -16,7 +16,8 @@ Install dependencies  using pip:
 pip install -r requirements.txt
 ```
 
-> [!important] Large files are excluded from this repo for portability. Including a 12GB dataset won't do anyone any good and will just slow down the process. To download the dataset separately, please visit the dataset website (included in references) **KITTI Vision Benchmark Suite.** [Website](http://www.cvlibs.net/datasets/kitti/)
+> [!important]
+> Large files are excluded from this repo for portability. Including a 12GB dataset won't do anyone any good and will just slow down the process. To download the dataset separately, please visit the dataset website (included in references) **KITTI Vision Benchmark Suite.** [Website](http://www.cvlibs.net/datasets/kitti/)
 > To counter this issue, I have uploaded a pickle file of all the training, calibration, and label sets in the cache folder, thank you for understanding
 
 After cloning the repo and installing the packages from the requirements text file, you can start inference by running this command (make sure you are in the root directory)
